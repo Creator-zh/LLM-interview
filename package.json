@@ -10,7 +10,8 @@
   },
   "scripts": {
     "postinstall": "cd web && npm ci",
-    "predev": "test -x .venv/bin/python || (echo '\\nERROR: .venv not found or not executable. Run ./setup.sh first.\\n' && exit 1)",
+    "build:solutions": ".venv/bin/python scripts/build_solutions.py",
+    "predev":"test -x .venv/bin/python || (echo '\\nERROR: .venv not found or not executable. Run ./setup.sh first.\\n' && exit 1)",
     "dev": "concurrently --names \"backend,frontend\" --prefix-colors \"yellow,cyan\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": ".venv/bin/python -m uvicorn grading_service.main:app --reload --reload-exclude '.git' --reload-exclude '.venv' --port 8000 --log-level info",
     "dev:frontend": "cd web && npm run dev"

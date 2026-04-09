@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { CodeEditor } from '@/components/workspace/CodeEditor';
+import solutionsData from '@/lib/solutions.json';
 
 interface SolutionPageProps {
   problemId: string;
@@ -13,20 +13,8 @@ interface Cell {
 }
 
 export function SolutionPageContent({ problemId }: SolutionPageProps) {
-  const [cells, setCells] = useState<Cell[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`/api/solutions/${problemId}`)
-      .then((r) => r.json())
-      .then((data) => setCells(data.cells || []))
-      .catch(() => setCells([]))
-      .finally(() => setLoading(false));
-  }, [problemId]);
-
-  if (loading) {
-    return <p className="text-sm text-text-tertiary p-6">Loading solution...</p>;
-  }
+  const data = (solutionsData as Record<string, { cells: Cell[] }>)[problemId];
+  const cells = data?.cells ?? [];
 
   if (cells.length === 0) {
     return <p className="text-sm text-text-tertiary p-6">No solution available yet.</p>;

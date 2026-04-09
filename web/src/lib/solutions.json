@@ -1,0 +1,954 @@
+{
+  "relu": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def relu(x: torch.Tensor) -> torch.Tensor:\n    return x * (x > 0).float()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "x = torch.tensor([-2., -1., 0., 1., 2.])\nprint(\"Input: \", x)\nprint(\"Output:\", relu(x))",
+        "role": "demo"
+      }
+    ]
+  },
+  "softmax": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def my_softmax(x: torch.Tensor, dim: int = -1) -> torch.Tensor:\n    x_max = x.max(dim=dim, keepdim=True).values\n    e_x = torch.exp(x - x_max)\n    return e_x / e_x.sum(dim=dim, keepdim=True)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "x = torch.tensor([1.0, 2.0, 3.0])\nprint(\"Output:\", my_softmax(x, dim=-1))\nprint(\"Sum:   \", my_softmax(x, dim=-1).sum())\nprint(\"Ref:   \", torch.softmax(x, dim=-1))",
+        "role": "demo"
+      }
+    ]
+  },
+  "linear": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class SimpleLinear:\n    def __init__(self, in_features: int, out_features: int):\n        self.weight = torch.randn(out_features, in_features) * (1 / math.sqrt(in_features))\n        self.weight.requires_grad_(True)\n        self.bias = torch.zeros(out_features, requires_grad=True)\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        return x @ self.weight.T + self.bias",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "layer = SimpleLinear(8, 4)\nprint(\"W shape:\", layer.weight.shape)\nprint(\"b shape:\", layer.bias.shape)\nx = torch.randn(2, 8)\nprint(\"Output shape:\", layer.forward(x).shape)",
+        "role": "demo"
+      }
+    ]
+  },
+  "layernorm": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def my_layer_norm(x, gamma, beta, eps=1e-5):\n    mean = x.mean(dim=-1, keepdim=True)\n    var = x.var(dim=-1, keepdim=True, unbiased=False)\n    x_norm = (x - mean) / torch.sqrt(var + eps)\n    return gamma * x_norm + beta",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "x = torch.randn(2, 8)\ngamma = torch.ones(8)\nbeta = torch.zeros(8)\nout = my_layer_norm(x, gamma, beta)\nref = torch.nn.functional.layer_norm(x, [8], gamma, beta)\nprint(\"Match ref?\", torch.allclose(out, ref, atol=1e-4))",
+        "role": "demo"
+      }
+    ]
+  },
+  "attention": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def scaled_dot_product_attention(Q, K, V):\n    d_k = K.size(-1)\n    scores = torch.bmm(Q, K.transpose(1, 2)) / math.sqrt(d_k)\n    weights = torch.softmax(scores, dim=-1)\n    return torch.bmm(weights, V)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(42)\nQ = torch.randn(2, 4, 8)\nK = torch.randn(2, 4, 8)\nV = torch.randn(2, 4, 8)\n\nout = scaled_dot_product_attention(Q, K, V)\nprint(\"Output shape:\", out.shape)\nprint(\"Attention weights sum to 1?\", True)\n\nQ2 = torch.randn(1, 3, 16)\nK2 = torch.randn(1, 5, 16)\nV2 = torch.randn(1, 5, 32)\nout2 = scaled_dot_product_attention(Q2, K2, V2)\nprint(\"Cross-attention shape:\", out2.shape, \"(expected: 1, 3, 32)\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "mha": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class MultiHeadAttention:\n    def __init__(self, d_model: int, num_heads: int):\n        self.num_heads = num_heads\n        self.d_k = d_model // num_heads\n\n        self.W_q = nn.Linear(d_model, d_model)\n        self.W_k = nn.Linear(d_model, d_model)\n        self.W_v = nn.Linear(d_model, d_model)\n        self.W_o = nn.Linear(d_model, d_model)\n\n    def forward(self, Q, K, V):\n        B, S_q, _ = Q.shape\n        S_k = K.shape[1]\n\n        q = self.W_q(Q).view(B, S_q, self.num_heads, self.d_k).transpose(1, 2)\n        k = self.W_k(K).view(B, S_k, self.num_heads, self.d_k).transpose(1, 2)\n        v = self.W_v(V).view(B, S_k, self.num_heads, self.d_k).transpose(1, 2)\n\n        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)\n        weights = torch.softmax(scores, dim=-1)\n        attn = torch.matmul(weights, v)\n\n        out = attn.transpose(1, 2).contiguous().view(B, S_q, -1)\n        return self.W_o(out)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nmha = MultiHeadAttention(d_model=32, num_heads=4)\nx = torch.randn(2, 6, 32)\nout = mha.forward(x, x, x)\nprint(\"Self-attn shape:\", out.shape)\n\nQ = torch.randn(1, 3, 32)\nK = torch.randn(1, 7, 32)\nV = torch.randn(1, 7, 32)\nout2 = mha.forward(Q, K, V)\nprint(\"Cross-attn shape:\", out2.shape)",
+        "role": "demo"
+      }
+    ]
+  },
+  "batchnorm": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def my_batch_norm(\n    x,\n    gamma,\n    beta,\n    running_mean,\n    running_var,\n    eps=1e-5,\n    momentum=0.1,\n    training=True,\n):\n    \"\"\"BatchNorm with train/eval behavior and running stats.\n\n    - Training: use batch stats, update running_mean / running_var in-place.\n    - Inference: use running_mean / running_var as-is.\n    \"\"\"\n    if training:\n        batch_mean = x.mean(dim=0)\n        batch_var = x.var(dim=0, unbiased=False)\n\n        running_mean.mul_(1 - momentum).add_(momentum * batch_mean.detach())\n        running_var.mul_(1 - momentum).add_(momentum * batch_var.detach())\n\n        mean = batch_mean\n        var = batch_var\n    else:\n        mean = running_mean\n        var = running_var\n\n    x_norm = (x - mean) / torch.sqrt(var + eps)\n    return gamma * x_norm + beta",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "x = torch.randn(8, 4)\ngamma = torch.ones(4)\nbeta = torch.zeros(4)\n\nrunning_mean = torch.zeros(4)\nrunning_var = torch.ones(4)\n\nout_train = my_batch_norm(x, gamma, beta, running_mean, running_var, training=True)\nprint(\"[Train] Column means:\", out_train.mean(dim=0))\nprint(\"[Train] Column stds: \", out_train.std(dim=0))\nprint(\"Updated running_mean:\", running_mean)\nprint(\"Updated running_var:\", running_var)\n\nout_eval = my_batch_norm(x, gamma, beta, running_mean, running_var, training=False)\nprint(\"[Eval] Column means (using running stats):\", out_eval.mean(dim=0))",
+        "role": "demo"
+      }
+    ]
+  },
+  "rmsnorm": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def rms_norm(x, weight, eps=1e-6):\n    rms = torch.sqrt(x.pow(2).mean(dim=-1, keepdim=True) + eps)\n    return x / rms * weight",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "x = torch.randn(2, 8)\nout = rms_norm(x, torch.ones(8))\nprint('RMS of output:', out.pow(2).mean(dim=-1).sqrt())",
+        "role": "demo"
+      }
+    ]
+  },
+  "causal_attention": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def causal_attention(Q, K, V):\n    d_k = K.size(-1)\n    scores = torch.bmm(Q, K.transpose(1, 2)) / math.sqrt(d_k)\n    S = scores.size(-1)\n    mask = torch.triu(torch.ones(S, S, device=scores.device, dtype=torch.bool), diagonal=1)\n    scores = scores.masked_fill(mask.unsqueeze(0), float('-inf'))\n    weights = torch.softmax(scores, dim=-1)\n    return torch.bmm(weights, V)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nQ = torch.randn(1, 4, 8)\nK = torch.randn(1, 4, 8)\nV = torch.randn(1, 4, 8)\nout = causal_attention(Q, K, V)\nprint(\"Pos 0 == V[0]?\", torch.allclose(out[:, 0], V[:, 0], atol=1e-5))",
+        "role": "demo"
+      }
+    ]
+  },
+  "gqa": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class GroupQueryAttention:\n    def __init__(self, d_model, num_heads, num_kv_heads):\n        self.num_heads = num_heads\n        self.num_kv_heads = num_kv_heads\n        self.d_k = d_model // num_heads\n        self.W_q = nn.Linear(d_model, d_model)\n        self.W_k = nn.Linear(d_model, num_kv_heads * self.d_k)\n        self.W_v = nn.Linear(d_model, num_kv_heads * self.d_k)\n        self.W_o = nn.Linear(d_model, d_model)\n\n    def forward(self, x):\n        B, S, _ = x.shape\n        q = self.W_q(x).view(B, S, self.num_heads, self.d_k).transpose(1, 2)\n        k = self.W_k(x).view(B, S, self.num_kv_heads, self.d_k).transpose(1, 2)\n        v = self.W_v(x).view(B, S, self.num_kv_heads, self.d_k).transpose(1, 2)\n        repeats = self.num_heads // self.num_kv_heads\n        k = k.repeat_interleave(repeats, dim=1)\n        v = v.repeat_interleave(repeats, dim=1)\n        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)\n        weights = torch.softmax(scores, dim=-1)\n        attn = torch.matmul(weights, v)\n        out = attn.transpose(1, 2).contiguous().view(B, S, -1)\n        return self.W_o(out)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "gqa = GroupQueryAttention(32, 8, 2)\nprint('Output:', gqa.forward(torch.randn(1, 4, 32)).shape)",
+        "role": "demo"
+      }
+    ]
+  },
+  "sliding_window": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def sliding_window_attention(Q, K, V, window_size):\n    d_k = K.size(-1)\n    scores = torch.bmm(Q, K.transpose(1, 2)) / math.sqrt(d_k)\n    S = Q.size(1)\n    idx = torch.arange(S, device=Q.device)\n    mask = (idx.unsqueeze(0) - idx.unsqueeze(1)).abs() > window_size\n    scores = scores.masked_fill(mask.unsqueeze(0), float('-inf'))\n    weights = torch.softmax(scores, dim=-1)\n    return torch.bmm(weights, V)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "Q=torch.randn(1,6,8); K=torch.randn(1,6,8); V=torch.randn(1,6,8)\nprint('window=0==V?', torch.allclose(sliding_window_attention(Q,K,V,0), V, atol=1e-5))",
+        "role": "demo"
+      }
+    ]
+  },
+  "linear_attention": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def linear_attention(Q, K, V):\n    Q_prime = F.elu(Q) + 1\n    K_prime = F.elu(K) + 1\n    KV = torch.bmm(K_prime.transpose(1, 2), V)       # (B, D_k, D_v)\n    Z = K_prime.sum(dim=1, keepdim=True)              # (B, 1, D_k)\n    num = torch.bmm(Q_prime, KV)                      # (B, S, D_v)\n    den = torch.bmm(Q_prime, Z.transpose(1, 2))       # (B, S, 1)\n    return num / (den + 1e-6)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "Q=torch.randn(1,8,16); K=torch.randn(1,8,16); V=torch.randn(1,8,32)\nprint('Shape:', linear_attention(Q,K,V).shape)",
+        "role": "demo"
+      }
+    ]
+  },
+  "gpt2_block": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class GPT2Block(nn.Module):\n    def __init__(self, d_model, num_heads):\n        super().__init__()\n        self.num_heads = num_heads\n        self.d_k = d_model // num_heads\n\n        self.ln1 = nn.LayerNorm(d_model)\n        self.ln2 = nn.LayerNorm(d_model)\n\n        self.W_q = nn.Linear(d_model, d_model)\n        self.W_k = nn.Linear(d_model, d_model)\n        self.W_v = nn.Linear(d_model, d_model)\n        self.W_o = nn.Linear(d_model, d_model)\n\n        self.mlp = nn.Sequential(\n            nn.Linear(d_model, 4 * d_model),\n            nn.GELU(),\n            nn.Linear(4 * d_model, d_model),\n        )\n\n    def _attn(self, x):\n        B, S, _ = x.shape\n        q = self.W_q(x).view(B, S, self.num_heads, self.d_k).transpose(1, 2)\n        k = self.W_k(x).view(B, S, self.num_heads, self.d_k).transpose(1, 2)\n        v = self.W_v(x).view(B, S, self.num_heads, self.d_k).transpose(1, 2)\n        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)\n        mask = torch.triu(torch.ones(S, S, device=x.device, dtype=torch.bool), diagonal=1)\n        scores = scores.masked_fill(mask, float('-inf'))\n        weights = torch.softmax(scores, dim=-1)\n        attn = torch.matmul(weights, v)\n        return self.W_o(attn.transpose(1, 2).contiguous().view(B, S, -1))\n\n    def forward(self, x):\n        x = x + self._attn(self.ln1(x))\n        x = x + self.mlp(self.ln2(x))\n        return x",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "block = GPT2Block(64, 4)\nprint('Output:', block(torch.randn(2, 8, 64)).shape)\nprint('Params:', sum(p.numel() for p in block.parameters()))",
+        "role": "demo"
+      }
+    ]
+  },
+  "kv_cache": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class KVCacheAttention(nn.Module):\n    def __init__(self, d_model, num_heads):\n        super().__init__()\n        self.num_heads = num_heads\n        self.d_k = d_model // num_heads\n        self.W_q = nn.Linear(d_model, d_model)\n        self.W_k = nn.Linear(d_model, d_model)\n        self.W_v = nn.Linear(d_model, d_model)\n        self.W_o = nn.Linear(d_model, d_model)\n\n    def forward(self, x, cache=None):\n        B, S_new, _ = x.shape\n\n        q = self.W_q(x).view(B, S_new, self.num_heads, self.d_k).transpose(1, 2)\n        k = self.W_k(x).view(B, S_new, self.num_heads, self.d_k).transpose(1, 2)\n        v = self.W_v(x).view(B, S_new, self.num_heads, self.d_k).transpose(1, 2)\n\n        if cache is not None:\n            k = torch.cat([cache[0], k], dim=2)\n            v = torch.cat([cache[1], v], dim=2)\n\n        new_cache = (k, v)\n        S_total = k.shape[2]\n\n        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)\n\n        if S_new > 1:\n            S_past = S_total - S_new\n            mask = torch.triu(\n                torch.ones(S_new, S_total, device=x.device, dtype=torch.bool),\n                diagonal=S_past + 1,\n            )\n            scores = scores.masked_fill(mask, float('-inf'))\n\n        weights = torch.softmax(scores, dim=-1)\n        attn = torch.matmul(weights, v)\n        out = self.W_o(attn.transpose(1, 2).contiguous().view(B, S_new, -1))\n        return out, new_cache",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nattn = KVCacheAttention(d_model=64, num_heads=4)\nx = torch.randn(1, 6, 64)\n\nfull_out, _ = attn(x)\nout1, cache = attn(x[:, :4])\nout2, cache = attn(x[:, 4:5], cache=cache)\nout3, cache = attn(x[:, 5:6], cache=cache)\ninc_out = torch.cat([out1, out2, out3], dim=1)\n\nprint('Full shape:', full_out.shape)\nprint('Match:', torch.allclose(full_out, inc_out, atol=1e-5))\nprint('Final cache K shape:', cache[0].shape)",
+        "role": "demo"
+      }
+    ]
+  },
+  "mlp": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class SwiGLUMLP(nn.Module):\n    def __init__(self, d_model, d_ff):\n        super().__init__()\n        self.gate_proj = nn.Linear(d_model, d_ff)\n        self.up_proj = nn.Linear(d_model, d_ff)\n        self.down_proj = nn.Linear(d_ff, d_model)\n\n    def forward(self, x):\n        return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "mlp = SwiGLUMLP(d_model=64, d_ff=128)\nx = torch.randn(2, 8, 64)\nprint('Output:', mlp(x).shape)\nprint('Params:', sum(p.numel() for p in mlp.parameters()))",
+        "role": "demo"
+      }
+    ]
+  },
+  "cross_entropy": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def cross_entropy_loss(logits, targets):\n    log_probs = logits - torch.logsumexp(logits, dim=-1, keepdim=True)\n    return -log_probs[torch.arange(targets.shape[0]), targets].mean()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "logits = torch.randn(4, 10)\ntargets = torch.randint(0, 10, (4,))\nprint('Loss:', cross_entropy_loss(logits, targets).item())\nprint('Ref: ', torch.nn.functional.cross_entropy(logits, targets).item())",
+        "role": "demo"
+      }
+    ]
+  },
+  "dropout": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class MyDropout(nn.Module):\n    def __init__(self, p=0.5):\n        super().__init__()\n        self.p = p\n\n    def forward(self, x):\n        if not self.training or self.p == 0:\n            return x\n        mask = (torch.rand_like(x) > self.p).float()\n        return x * mask / (1 - self.p)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "d = MyDropout(p=0.5)\nd.train()\nx = torch.ones(10)\nprint('Train:', d(x))\nd.eval()\nprint('Eval: ', d(x))",
+        "role": "demo"
+      }
+    ]
+  },
+  "embedding": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class MyEmbedding(nn.Module):\n    def __init__(self, num_embeddings, embedding_dim):\n        super().__init__()\n        self.weight = nn.Parameter(torch.randn(num_embeddings, embedding_dim))\n\n    def forward(self, indices):\n        return self.weight[indices]",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "emb = MyEmbedding(10, 4)\nidx = torch.tensor([0, 3, 7])\nprint('Output shape:', emb(idx).shape)\nprint('Matches manual:', torch.equal(emb(idx)[0], emb.weight[0]))",
+        "role": "demo"
+      }
+    ]
+  },
+  "gelu": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def my_gelu(x):\n    return 0.5 * x * (1.0 + torch.erf(x / math.sqrt(2.0)))",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "x = torch.tensor([-2., -1., 0., 1., 2.])\nprint('Output:', my_gelu(x))\nprint('Ref:   ', torch.nn.functional.gelu(x))",
+        "role": "demo"
+      }
+    ]
+  },
+  "weight_init": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def kaiming_init(weight):\n    fan_in = weight.shape[1] if weight.dim() >= 2 else weight.shape[0]\n    std = math.sqrt(2.0 / fan_in)\n    with torch.no_grad():\n        weight.normal_(0, std)\n    return weight",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "w = torch.empty(256, 512)\nkaiming_init(w)\nprint(f'Mean: {w.mean():.4f} (expect ~0)')\nprint(f'Std:  {w.std():.4f} (expect {math.sqrt(2/512):.4f})')",
+        "role": "demo"
+      }
+    ]
+  },
+  "gradient_clipping": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def clip_grad_norm(parameters, max_norm):\n    parameters = [p for p in parameters if p.grad is not None]\n    total_norm = torch.sqrt(sum(p.grad.norm() ** 2 for p in parameters))\n    clip_coef = max_norm / (total_norm + 1e-6)\n    if clip_coef < 1:\n        for p in parameters:\n            p.grad.mul_(clip_coef)\n    return total_norm.item()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "p = torch.randn(100, requires_grad=True)\n(p * 10).sum().backward()\nprint('Before:', p.grad.norm().item())\norig = clip_grad_norm([p], max_norm=1.0)\nprint('After: ', p.grad.norm().item())\nprint('Returned:', orig)",
+        "role": "demo"
+      }
+    ]
+  },
+  "conv2d": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def my_conv2d(x, weight, bias=None, stride=1, padding=0):\n    if padding > 0:\n        x = F.pad(x, [padding] * 4)\n    B, C_in, H, W = x.shape\n    C_out, _, kH, kW = weight.shape\n    H_out = (H - kH) // stride + 1\n    W_out = (W - kW) // stride + 1\n    patches = x.unfold(2, kH, stride).unfold(3, kW, stride)\n    out = torch.einsum('bihwjk,oijk->bohw', patches, weight)\n    if bias is not None:\n        out = out + bias.view(1, -1, 1, 1)\n    return out",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "x = torch.randn(1, 3, 8, 8)\nw = torch.randn(16, 3, 3, 3)\nprint('Output:', my_conv2d(x, w).shape)\nprint('Match:', torch.allclose(my_conv2d(x, w), F.conv2d(x, w), atol=1e-4))",
+        "role": "demo"
+      }
+    ]
+  },
+  "cross_attention": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class MultiHeadCrossAttention(nn.Module):\n    def __init__(self, d_model, num_heads):\n        super().__init__()\n        self.num_heads = num_heads\n        self.d_k = d_model // num_heads\n        self.W_q = nn.Linear(d_model, d_model)\n        self.W_k = nn.Linear(d_model, d_model)\n        self.W_v = nn.Linear(d_model, d_model)\n        self.W_o = nn.Linear(d_model, d_model)\n\n    def forward(self, x_q, x_kv):\n        B, S_q, _ = x_q.shape\n        S_kv = x_kv.shape[1]\n        q = self.W_q(x_q).view(B, S_q, self.num_heads, self.d_k).transpose(1, 2)\n        k = self.W_k(x_kv).view(B, S_kv, self.num_heads, self.d_k).transpose(1, 2)\n        v = self.W_v(x_kv).view(B, S_kv, self.num_heads, self.d_k).transpose(1, 2)\n        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)\n        weights = torch.softmax(scores, dim=-1)\n        attn = torch.matmul(weights, v)\n        return self.W_o(attn.transpose(1, 2).contiguous().view(B, S_q, -1))",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "attn = MultiHeadCrossAttention(64, 4)\nx_q = torch.randn(2, 6, 64)\nx_kv = torch.randn(2, 10, 64)\nprint('Output:', attn(x_q, x_kv).shape)",
+        "role": "demo"
+      }
+    ]
+  },
+  "rope": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def apply_rope(q, k):\n    B, S, D = q.shape\n    pos = torch.arange(S, device=q.device).unsqueeze(1).float()\n    dim = torch.arange(0, D, 2, device=q.device).float()\n    freqs = 1.0 / (10000.0 ** (dim / D))\n    angles = pos * freqs\n    cos_a = torch.cos(angles)\n    sin_a = torch.sin(angles)\n\n    def rotate(x):\n        x1, x2 = x[..., 0::2], x[..., 1::2]\n        return torch.stack([x1 * cos_a - x2 * sin_a,\n                            x1 * sin_a + x2 * cos_a], dim=-1).flatten(-2)\n\n    return rotate(q), rotate(k)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "q = torch.randn(1, 8, 16)\nk = torch.randn(1, 8, 16)\nqr, kr = apply_rope(q, k)\nprint('Shape preserved:', qr.shape == q.shape)\nprint('Norm preserved:', torch.allclose(q.norm(dim=-1), qr.norm(dim=-1), atol=1e-4))",
+        "role": "demo"
+      }
+    ]
+  },
+  "flash_attention": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def flash_attention(Q, K, V, block_size=32):\n    B, S, D = Q.shape\n    output = torch.zeros_like(Q)\n    for i in range(0, S, block_size):\n        qi = Q[:, i:i+block_size]\n        bs_q = qi.shape[1]\n        row_max = torch.full((B, bs_q, 1), float('-inf'), device=Q.device)\n        row_sum = torch.zeros(B, bs_q, 1, device=Q.device)\n        acc = torch.zeros(B, bs_q, D, device=Q.device)\n        for j in range(0, S, block_size):\n            kj = K[:, j:j+block_size]\n            vj = V[:, j:j+block_size]\n            scores = torch.bmm(qi, kj.transpose(1, 2)) / math.sqrt(D)\n            block_max = scores.max(dim=-1, keepdim=True).values\n            new_max = torch.maximum(row_max, block_max)\n            correction = torch.exp(row_max - new_max)\n            exp_scores = torch.exp(scores - new_max)\n            acc = acc * correction + torch.bmm(exp_scores, vj)\n            row_sum = row_sum * correction + exp_scores.sum(dim=-1, keepdim=True)\n            row_max = new_max\n        output[:, i:i+block_size] = acc / row_sum\n    return output",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "Q, K, V = torch.randn(1, 16, 8), torch.randn(1, 16, 8), torch.randn(1, 16, 8)\nout = flash_attention(Q, K, V, block_size=4)\nscores = torch.bmm(Q, K.transpose(1,2)) / math.sqrt(8)\nref = torch.bmm(torch.softmax(scores, dim=-1), V)\nprint('Shape:', out.shape)\nprint('Max diff:', (out - ref).abs().max().item())",
+        "role": "demo"
+      }
+    ]
+  },
+  "lora": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class LoRALinear(nn.Module):\n    def __init__(self, in_features, out_features, rank, alpha=1.0):\n        super().__init__()\n        self.linear = nn.Linear(in_features, out_features)\n        self.linear.weight.requires_grad_(False)\n        self.linear.bias.requires_grad_(False)\n        self.lora_A = nn.Parameter(torch.randn(rank, in_features) * 0.01)\n        self.lora_B = nn.Parameter(torch.zeros(out_features, rank))\n        self.scaling = alpha / rank\n\n    def forward(self, x):\n        return self.linear(x) + (x @ self.lora_A.T @ self.lora_B.T) * self.scaling",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "layer = LoRALinear(16, 8, rank=4)\nx = torch.randn(2, 16)\nprint('Output:', layer(x).shape)\ntrainable = sum(p.numel() for p in layer.parameters() if p.requires_grad)\ntotal = sum(p.numel() for p in layer.parameters())\nprint(f'Trainable: {trainable}/{total} ({100*trainable/total:.1f}%)')",
+        "role": "demo"
+      }
+    ]
+  },
+  "vit_patch": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class PatchEmbedding(nn.Module):\n    def __init__(self, img_size, patch_size, in_channels, embed_dim):\n        super().__init__()\n        self.patch_size = patch_size\n        self.num_patches = (img_size // patch_size) ** 2\n        self.proj = nn.Linear(in_channels * patch_size * patch_size, embed_dim)\n\n    def forward(self, x):\n        B, C, H, W = x.shape\n        p = self.patch_size\n        n_h, n_w = H // p, W // p\n        x = x.reshape(B, C, n_h, p, n_w, p)\n        x = x.permute(0, 2, 4, 1, 3, 5).reshape(B, n_h * n_w, C * p * p)\n        return self.proj(x)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "pe = PatchEmbedding(224, 16, 3, 768)\nx = torch.randn(1, 3, 224, 224)\nprint('Output:', pe(x).shape)\nprint('Patches:', pe.num_patches)",
+        "role": "demo"
+      }
+    ]
+  },
+  "moe": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class MixtureOfExperts(nn.Module):\n    def __init__(self, d_model, d_ff, num_experts, top_k=2):\n        super().__init__()\n        self.top_k = top_k\n        self.router = nn.Linear(d_model, num_experts)\n        self.experts = nn.ModuleList([\n            nn.Sequential(nn.Linear(d_model, d_ff), nn.ReLU(), nn.Linear(d_ff, d_model))\n            for _ in range(num_experts)\n        ])\n\n    def forward(self, x):\n        orig_shape = x.shape\n        if x.dim() == 3:\n            B, S, D = x.shape\n            x_flat = x.reshape(-1, D)\n        else:\n            x_flat = x\n        logits = self.router(x_flat)\n        top_vals, top_idx = logits.topk(self.top_k, dim=-1)\n        weights = torch.softmax(top_vals, dim=-1)\n        output = torch.zeros_like(x_flat)\n        for k in range(self.top_k):\n            for e in range(len(self.experts)):\n                mask = (top_idx[:, k] == e)\n                if mask.any():\n                    output[mask] += weights[mask, k:k+1] * self.experts[e](x_flat[mask])\n        return output.reshape(orig_shape)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "moe = MixtureOfExperts(32, 64, num_experts=4, top_k=2)\nx = torch.randn(2, 8, 32)\nprint('Output:', moe(x).shape)\nprint('Params:', sum(p.numel() for p in moe.parameters()))",
+        "role": "demo"
+      }
+    ]
+  },
+  "adam": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class MyAdam:\n    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8):\n        self.params = list(params)\n        self.lr = lr\n        self.beta1, self.beta2 = betas\n        self.eps = eps\n        self.t = 0\n        self.m = [torch.zeros_like(p) for p in self.params]\n        self.v = [torch.zeros_like(p) for p in self.params]\n\n    def step(self):\n        self.t += 1\n        with torch.no_grad():\n            for i, p in enumerate(self.params):\n                if p.grad is None:\n                    continue\n                self.m[i] = self.beta1 * self.m[i] + (1 - self.beta1) * p.grad\n                self.v[i] = self.beta2 * self.v[i] + (1 - self.beta2) * p.grad ** 2\n                m_hat = self.m[i] / (1 - self.beta1 ** self.t)\n                v_hat = self.v[i] / (1 - self.beta2 ** self.t)\n                p -= self.lr * m_hat / (torch.sqrt(v_hat) + self.eps)\n\n    def zero_grad(self):\n        for p in self.params:\n            if p.grad is not None:\n                p.grad.zero_()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nw = torch.randn(4, 3, requires_grad=True)\nopt = MyAdam([w], lr=0.01)\nfor i in range(5):\n    loss = (w ** 2).sum()\n    loss.backward()\n    opt.step()\n    opt.zero_grad()\n    print(f'Step {i}: loss={loss.item():.4f}')",
+        "role": "demo"
+      }
+    ]
+  },
+  "cosine_lr": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def cosine_lr_schedule(step, total_steps, warmup_steps, max_lr, min_lr=0.0):\n    if step < warmup_steps:\n        return max_lr * step / warmup_steps\n    if step >= total_steps:\n        return min_lr\n    progress = (step - warmup_steps) / (total_steps - warmup_steps)\n    return min_lr + 0.5 * (max_lr - min_lr) * (1.0 + math.cos(math.pi * progress))",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "lrs = [cosine_lr_schedule(i, 100, 10, 0.001) for i in range(101)]\nprint(f'Start: {lrs[0]:.6f}, Warmup end: {lrs[10]:.6f}, Mid: {lrs[55]:.6f}, End: {lrs[100]:.6f}')",
+        "role": "demo"
+      }
+    ]
+  },
+  "gradient_accumulation": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def accumulated_step(model, optimizer, loss_fn, micro_batches):\n    optimizer.zero_grad()\n    total_loss = 0.0\n    n = len(micro_batches)\n    for x, y in micro_batches:\n        loss = loss_fn(model(x), y) / n\n        loss.backward()\n        total_loss += loss.item()\n    optimizer.step()\n    return total_loss",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "model = nn.Linear(4, 2)\nopt = torch.optim.SGD(model.parameters(), lr=0.01)\nloss = accumulated_step(model, opt, nn.MSELoss(),\n    [(torch.randn(2, 4), torch.randn(2, 2)) for _ in range(4)])\nprint('Accumulated loss:', loss)",
+        "role": "demo"
+      }
+    ]
+  },
+  "topk_sampling": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def sample_top_k_top_p(logits, top_k=0, top_p=1.0, temperature=1.0):\n    logits = logits / max(temperature, 1e-8)\n    if top_k > 0:\n        top_k_val = logits.topk(top_k).values[-1]\n        logits[logits < top_k_val] = float('-inf')\n    if top_p < 1.0:\n        sorted_logits, sorted_idx = torch.sort(logits, descending=True)\n        probs = torch.softmax(sorted_logits, dim=-1)\n        cumsum = torch.cumsum(probs, dim=-1)\n        mask = (cumsum - probs) > top_p\n        sorted_logits[mask] = float('-inf')\n        logits = torch.empty_like(logits).scatter_(0, sorted_idx, sorted_logits)\n    probs = torch.softmax(logits, dim=-1)\n    return torch.multinomial(probs, 1).item()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "logits = torch.tensor([1.0, 5.0, 2.0, 0.5])\nprint('top_k=1:', sample_top_k_top_p(logits.clone(), top_k=1))\nprint('top_p=0.5:', sample_top_k_top_p(logits.clone(), top_p=0.5))",
+        "role": "demo"
+      }
+    ]
+  },
+  "beam_search": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def beam_search(log_prob_fn, start_token, max_len, beam_width, eos_token):\n    beams = [(0.0, [start_token])]\n    completed = []\n    for _ in range(max_len):\n        candidates = []\n        for score, seq in beams:\n            if seq[-1] == eos_token:\n                completed.append((score, seq))\n                continue\n            log_probs = log_prob_fn(torch.tensor(seq))\n            topk_lp, topk_idx = log_probs.topk(beam_width)\n            for j in range(beam_width):\n                candidates.append((score + topk_lp[j].item(), seq + [topk_idx[j].item()]))\n        if not candidates:\n            break\n        candidates.sort(key=lambda x: x[0], reverse=True)\n        beams = candidates[:beam_width]\n    all_seqs = completed + beams\n    all_seqs.sort(key=lambda x: x[0], reverse=True)\n    return all_seqs[0][1]",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "def simple_fn(tokens):\n    lp = torch.full((5,), -10.0)\n    lp[min(len(tokens), 4)] = 0.0\n    return lp\nseq = beam_search(simple_fn, start_token=0, max_len=5, beam_width=2, eos_token=4)\nprint('Sequence:', seq)",
+        "role": "demo"
+      }
+    ]
+  },
+  "speculative_decoding": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def speculative_decode(target_probs, draft_probs, draft_tokens):\n    K = len(draft_tokens)\n    accepted = []\n    for i in range(K):\n        t = draft_tokens[i].item()\n        ratio = target_probs[i, t] / max(draft_probs[i, t].item(), 1e-10)\n        if torch.rand(1).item() < min(1.0, ratio.item()):\n            accepted.append(t)\n        else:\n            adjusted = torch.clamp(target_probs[i] - draft_probs[i], min=0)\n            s = adjusted.sum()\n            if s > 0:\n                adjusted = adjusted / s\n            else:\n                adjusted = torch.ones_like(adjusted) / adjusted.shape[0]\n            accepted.append(torch.multinomial(adjusted, 1).item())\n            return accepted\n    return accepted",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nprobs = torch.softmax(torch.randn(4, 10), dim=-1)\ntokens = torch.tensor([2, 5, 1, 8])\nprint('Perfect draft:', speculative_decode(probs, probs, tokens))",
+        "role": "demo"
+      }
+    ]
+  },
+  "bpe": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class SimpleBPE:\n    def __init__(self):\n        self.merges = []\n\n    def train(self, corpus, num_merges):\n        vocab = {}\n        for word in corpus:\n            symbols = tuple(word) + ('</w>',)\n            vocab[symbols] = vocab.get(symbols, 0) + 1\n        self.merges = []\n        for _ in range(num_merges):\n            pairs = {}\n            for word, freq in vocab.items():\n                for i in range(len(word) - 1):\n                    pair = (word[i], word[i + 1])\n                    pairs[pair] = pairs.get(pair, 0) + freq\n            if not pairs:\n                break\n            best = max(pairs, key=pairs.get)\n            self.merges.append(best)\n            new_vocab = {}\n            for word, freq in vocab.items():\n                new_word = []\n                i = 0\n                while i < len(word):\n                    if i < len(word) - 1 and (word[i], word[i + 1]) == best:\n                        new_word.append(word[i] + word[i + 1])\n                        i += 2\n                    else:\n                        new_word.append(word[i])\n                        i += 1\n                new_vocab[tuple(new_word)] = freq\n            vocab = new_vocab\n\n    def encode(self, text):\n        all_tokens = []\n        for word in text.split():\n            symbols = list(word) + ['</w>']\n            for a, b in self.merges:\n                i = 0\n                while i < len(symbols) - 1:\n                    if symbols[i] == a and symbols[i + 1] == b:\n                        symbols = symbols[:i] + [a + b] + symbols[i + 2:]\n                    else:\n                        i += 1\n            all_tokens.extend(symbols)\n        return all_tokens",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "bpe = SimpleBPE()\nbpe.train(['low', 'low', 'low', 'lower', 'newest', 'widest'], num_merges=10)\nprint('Merges:', bpe.merges)\nprint('Encode:', bpe.encode('low lower newest'))",
+        "role": "demo"
+      }
+    ]
+  },
+  "int8_quantization": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class Int8Linear(nn.Module):\n    def __init__(self, weight, bias=None):\n        super().__init__()\n        scale = weight.abs().amax(dim=1, keepdim=True) / 127.0\n        self.register_buffer('weight_int8',\n            torch.round(weight / (scale + 1e-10)).clamp(-128, 127).to(torch.int8))\n        self.register_buffer('scale', scale)\n        self.bias = nn.Parameter(bias.clone()) if bias is not None else None\n\n    def forward(self, x):\n        w = self.weight_int8.float() * self.scale\n        out = x @ w.T\n        if self.bias is not None:\n            out = out + self.bias\n        return out",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "w = torch.randn(8, 4)\nq = Int8Linear(w)\nprint('Output:', q(torch.randn(2, 4)).shape)\nprint('Weight dtype:', q.weight_int8.dtype)\nprint('Compression: float32 -> int8 = 4x')",
+        "role": "demo"
+      }
+    ]
+  },
+  "dpo_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def dpo_loss(policy_chosen_logps, policy_rejected_logps,\n             ref_chosen_logps, ref_rejected_logps, beta=0.1):\n    chosen_rewards = beta * (policy_chosen_logps - ref_chosen_logps)\n    rejected_rewards = beta * (policy_rejected_logps - ref_rejected_logps)\n    return -F.logsigmoid(chosen_rewards - rejected_rewards).mean()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "chosen = torch.tensor([0.0, 0.0])\nrejected = torch.tensor([-5.0, -5.0])\nref_c = torch.tensor([-1.0, -1.0])\nref_r = torch.tensor([-1.0, -1.0])\nprint('Loss:', dpo_loss(chosen, rejected, ref_c, ref_r, beta=0.1).item())",
+        "role": "demo"
+      }
+    ]
+  },
+  "grpo_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def grpo_loss(logps: Tensor, rewards: Tensor, group_ids: Tensor,\n              eps: float = 1e-5) -> Tensor:\n    \"\"\"Group Relative Policy Optimization (GRPO) loss.\n\n    logps: (B,) policy log-probs for each sampled response\n    rewards: (B,) scalar rewards for each response\n    group_ids: (B,) integers, same id = same prompt/group\n    returns: scalar loss (Tensor)\n    \"\"\"\n    unique_ids = group_ids.unique()\n    advantages = torch.empty_like(rewards)\n    for gid in unique_ids:\n        mask = group_ids == gid\n        r_g = rewards[mask]\n        mean_g = r_g.mean()\n        std_g = r_g.std(unbiased=False)\n        advantages[mask] = (r_g - mean_g) / (std_g + eps)\n\n    advantages_detached = advantages.detach()\n\n    return -(advantages_detached * logps).mean()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "logps = torch.tensor([0.0, -0.5, -1.0, -1.5])\nrewards = torch.tensor([1.0, 0.8, 0.2, 0.0])\ngroup_ids = torch.tensor([0, 0, 1, 1])\nprint('Loss:', grpo_loss(logps, rewards, group_ids).item())",
+        "role": "demo"
+      }
+    ]
+  },
+  "ppo_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def ppo_loss(new_logps: Tensor, old_logps: Tensor, advantages: Tensor,\n             clip_ratio: float = 0.2) -> Tensor:\n    \"\"\"PPO clipped surrogate loss.\n\n    new_logps: (B,) current policy log-probs\n    old_logps: (B,) old policy log-probs (treated as constant)\n    advantages: (B,) advantage estimates (treated as constant)\n    returns: scalar loss (Tensor)\n    \"\"\"\n    old_logps_detached = old_logps.detach()\n    adv_detached = advantages.detach()\n\n    ratios = torch.exp(new_logps - old_logps_detached)\n\n    unclipped = ratios * adv_detached\n    clipped = torch.clamp(ratios, 1.0 - clip_ratio, 1.0 + clip_ratio) * adv_detached\n\n    return -torch.min(unclipped, clipped).mean()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "new_logps = torch.tensor([0.0, -0.2, -0.4, -0.6])\nold_logps = torch.tensor([0.0, -0.1, -0.5, -0.5])\nadvantages = torch.tensor([1.0, -1.0, 0.5, -0.5])\nprint('Loss:', ppo_loss(new_logps, old_logps, advantages, clip_ratio=0.2))",
+        "role": "demo"
+      }
+    ]
+  },
+  "linear_regression": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class LinearRegression:\n    def closed_form(self, X: torch.Tensor, y: torch.Tensor):\n        \"\"\"Normal equation via augmented matrix.\"\"\"\n        N, D = X.shape\n        X_aug = torch.cat([X, torch.ones(N, 1)], dim=1)  # (N, D+1)\n        theta = torch.linalg.lstsq(X_aug, y).solution      # (D+1,)\n        w = theta[:D]\n        b = theta[D]\n        return w.detach(), b.detach()\n\n    def gradient_descent(self, X: torch.Tensor, y: torch.Tensor,\n                         lr: float = 0.01, steps: int = 1000):\n        \"\"\"Manual gradient computation — no autograd.\"\"\"\n        N, D = X.shape\n        w = torch.zeros(D)\n        b = torch.tensor(0.0)\n\n        for _ in range(steps):\n            pred = X @ w + b          # (N,)\n            error = pred - y           # (N,)\n            grad_w = (2.0 / N) * (X.T @ error)  # (D,)\n            grad_b = (2.0 / N) * error.sum()     # scalar\n            w = w - lr * grad_w\n            b = b - lr * grad_b\n\n        return w, b\n\n    def nn_linear(self, X: torch.Tensor, y: torch.Tensor,\n                  lr: float = 0.01, steps: int = 1000):\n        \"\"\"PyTorch nn.Linear with autograd training loop.\"\"\"\n        N, D = X.shape\n        layer = nn.Linear(D, 1)\n        optimizer = torch.optim.SGD(layer.parameters(), lr=lr)\n        loss_fn = nn.MSELoss()\n\n        for _ in range(steps):\n            optimizer.zero_grad()\n            pred = layer(X).squeeze(-1)  # (N,)\n            loss = loss_fn(pred, y)\n            loss.backward()\n            optimizer.step()\n\n        w = layer.weight.data.squeeze(0)  # (D,)\n        b = layer.bias.data.squeeze(0)    # scalar ()\n        return w, b",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(42)\nX = torch.randn(100, 3)\ntrue_w = torch.tensor([2.0, -1.0, 0.5])\ny = X @ true_w + 3.0\n\nmodel = LinearRegression()\nfor name, method in [(\"Closed-form\", model.closed_form),\n                      (\"Grad Descent\", lambda X, y: model.gradient_descent(X, y, lr=0.05, steps=2000)),\n                      (\"nn.Linear\", lambda X, y: model.nn_linear(X, y, lr=0.05, steps=2000))]:\n    w, b = method(X, y)\n    print(f\"{name:13s}  w={w.tolist()}  b={b.item():.4f}\")\nprint(f\"{'True':13s}  w={true_w.tolist()}  b=3.0000\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "sinusoidal_pe": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def sinusoidal_pe(seq_len, d_model):\n    pos = torch.arange(seq_len).float().unsqueeze(1)\n    dim = torch.arange(0, d_model, 2).float()\n    freqs = 1.0 / (10000.0 ** (dim / d_model))\n    angles = pos * freqs\n    pe = torch.zeros(seq_len, d_model)\n    pe[:, 0::2] = torch.sin(angles)\n    pe[:, 1::2] = torch.cos(angles)\n    return pe",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "pe = sinusoidal_pe(10, 16)\nprint(pe.shape)\nprint(pe[:3, :4])",
+        "role": "demo"
+      }
+    ]
+  },
+  "label_smoothing": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def label_smoothing(logits, targets, smoothing=0.1):\n    N, C = logits.shape\n    log_probs = torch.nn.functional.log_softmax(logits, dim=-1)\n    soft_targets = torch.full_like(log_probs, smoothing / (C - 1))\n    soft_targets.scatter_(1, targets.unsqueeze(1), 1.0 - smoothing)\n    return -(soft_targets * log_probs).sum(dim=-1).mean()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nlogits = torch.randn(4, 10)\ntargets = torch.randint(0, 10, (4,))\n\nloss_smoothed = label_smoothing(logits, targets, smoothing=0.1)\nloss_ce = torch.nn.functional.cross_entropy(logits, targets)\n\nprint(f\"Label smoothing loss (eps=0.1): {loss_smoothed.item():.4f}\")\nprint(f\"Standard CE loss (eps=0.0):    {loss_ce.item():.4f}\")\n\nloss_no_smooth = label_smoothing(logits, targets, smoothing=0.0)\nprint(f\"Label smoothing loss (eps=0.0): {loss_no_smooth.item():.4f}  (matches CE: {torch.allclose(loss_no_smooth, loss_ce)})\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "swiglu": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def swiglu(x, W1, W2, Wgate):\n    h = x @ W1\n    gate = x @ Wgate\n    swish_gate = gate * torch.sigmoid(gate)\n    return (h * swish_gate) @ W2",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nB, D, H = 2, 8, 16\nx = torch.randn(B, D)\nW1 = torch.randn(D, H)\nW2 = torch.randn(H, D)\nWgate = torch.randn(D, H)\n\nout = swiglu(x, W1, W2, Wgate)\nprint(\"Output shape:\", out.shape)\n\ngate = x @ Wgate\nswish_gate = gate * torch.sigmoid(gate)\nprint(\"Gate (swish) sample values:\", swish_gate[0, :4])",
+        "role": "demo"
+      }
+    ]
+  },
+  "alibi": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def alibi_attention(Q, K, V, num_heads):\n    B, S, D = Q.shape\n    d_h = D // num_heads\n\n    h_idx = torch.arange(1, num_heads + 1, dtype=torch.float32, device=Q.device)\n    slopes = 1.0 / (2.0 ** (8.0 * h_idx / num_heads))\n\n    pos = torch.arange(S, device=Q.device).float()\n    dist = (pos.unsqueeze(0) - pos.unsqueeze(1)).abs()\n\n    bias = -slopes.view(num_heads, 1, 1) * dist.unsqueeze(0)\n\n    Qh = Q.view(B, S, num_heads, d_h).transpose(1, 2)\n    Kh = K.view(B, S, num_heads, d_h).transpose(1, 2)\n    Vh = V.view(B, S, num_heads, d_h).transpose(1, 2)\n\n    scores = (Qh @ Kh.transpose(-2, -1)) / (d_h ** 0.5) + bias.unsqueeze(0)\n    attn = torch.softmax(scores, dim=-1)\n    out = (attn @ Vh).transpose(1, 2).reshape(B, S, D)\n    return out",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nB, S, D, H = 2, 6, 16, 4\nQ = torch.randn(B, S, D)\nK = torch.randn(B, S, D)\nV = torch.randn(B, S, D)\n\nout = alibi_attention(Q, K, V, num_heads=H)\nprint(\"Output shape:\", out.shape)\n\nh_idx = torch.arange(1, H + 1, dtype=torch.float32)\nslopes = 1.0 / (2.0 ** (8.0 * h_idx / H))\nprint(\"Slopes for 4 heads:\", slopes)",
+        "role": "demo"
+      }
+    ]
+  },
+  "ntk_rope": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def ntk_rope(q, k, scale):\n    B, S, D = q.shape\n    new_base = 10000.0 * (scale ** (D / (D - 2)))\n    pos = torch.arange(S, device=q.device).float().unsqueeze(1)\n    dim = torch.arange(0, D, 2, device=q.device).float()\n    freqs = 1.0 / (new_base ** (dim / D))\n    angles = pos * freqs\n    cos_a = torch.cos(angles)\n    sin_a = torch.sin(angles)\n\n    def rotate(x):\n        x1, x2 = x[..., 0::2], x[..., 1::2]\n        return torch.stack([x1 * cos_a - x2 * sin_a,\n                            x1 * sin_a + x2 * cos_a], dim=-1).flatten(-2)\n\n    return rotate(q), rotate(k)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "B, S, D = 1, 8, 16\nq = torch.randn(B, S, D)\nk = torch.randn(B, S, D)\n\nq1, k1 = ntk_rope(q, k, scale=1.0)\nq4, k4 = ntk_rope(q, k, scale=4.0)\n\nprint(\"scale=1 base:\", 10000.0 * (1.0 ** (D / (D - 2))))\nprint(\"scale=4 base:\", 10000.0 * (4.0 ** (D / (D - 2))))\nprint()\nprint(\"Norm preservation (scale=1):\")\nprint(\"  q input norm:\", q.norm(dim=-1).mean().item())\nprint(\"  q output norm:\", q1.norm(dim=-1).mean().item())\nprint()\nprint(\"Norm preservation (scale=4):\")\nprint(\"  q input norm:\", q.norm(dim=-1).mean().item())\nprint(\"  q output norm:\", q4.norm(dim=-1).mean().item())",
+        "role": "demo"
+      }
+    ]
+  },
+  "mixed_precision": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def mixed_precision_step(model, optimizer, loss_fn, x, y, loss_scale=1024.0):\n    model.half()\n    x_fp16 = x.half()\n    output = model(x_fp16)\n    loss = loss_fn(output.float(), y)\n    loss_val = loss.item()\n\n    optimizer.zero_grad()\n    (loss * loss_scale).backward()\n\n    for p in model.parameters():\n        if p.grad is not None:\n            p.grad.data = p.grad.data.float() / loss_scale\n\n    model.float()\n    optimizer.step()\n\n    return loss_val",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(42)\nmodel = nn.Linear(8, 4)\noptimizer = torch.optim.SGD(model.parameters(), lr=0.01)\nloss_fn = nn.MSELoss()\n\nx = torch.randn(4, 8)\ny = torch.randn(4, 4)\n\nweights_before = model.weight.data.clone()\n\nloss_val = mixed_precision_step(model, optimizer, loss_fn, x, y)\n\nprint(\"Loss:\", loss_val)\nprint(\"Weights updated:\", not torch.allclose(model.weight.data, weights_before))\nprint(\"Model dtype after step:\", model.weight.dtype)",
+        "role": "demo"
+      }
+    ]
+  },
+  "paged_attention": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def paged_attention(Q, k_pages, v_pages, block_table, context_len, block_size):\n    B, _, D = Q.shape\n    outputs = []\n    for b in range(B):\n        phys_blocks = block_table[b]\n        K_gathered = k_pages[phys_blocks].reshape(-1, D)\n        V_gathered = v_pages[phys_blocks].reshape(-1, D)\n        K_ctx = K_gathered[:context_len].unsqueeze(0)\n        V_ctx = V_gathered[:context_len].unsqueeze(0)\n        scale = D ** -0.5\n        scores = (Q[b:b+1] @ K_ctx.transpose(-2, -1)) * scale\n        attn = torch.softmax(scores, dim=-1)\n        out = attn @ V_ctx\n        outputs.append(out)\n    return torch.cat(outputs, dim=0)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nB, S, D = 2, 8, 16\nblock_size = 4\nnum_blocks = S // block_size\n\nK_full = torch.randn(B, S, D)\nV_full = torch.randn(B, S, D)\nQ = torch.randn(B, 1, D)\n\nscale = D ** -0.5\nscores_ref = (Q @ K_full.transpose(-2, -1)) * scale\nref_out = torch.softmax(scores_ref, dim=-1) @ V_full\n\ntotal_pages = B * num_blocks\nk_pages = torch.zeros(total_pages, block_size, D)\nv_pages = torch.zeros(total_pages, block_size, D)\nblock_table = []\nfor b in range(B):\n    page_ids = []\n    for blk in range(num_blocks):\n        pid = b * num_blocks + blk\n        k_pages[pid] = K_full[b, blk*block_size:(blk+1)*block_size]\n        v_pages[pid] = V_full[b, blk*block_size:(blk+1)*block_size]\n        page_ids.append(pid)\n    block_table.append(page_ids)\n\npaged_out = paged_attention(Q, k_pages, v_pages, block_table, context_len=S, block_size=block_size)\n\nprint('Shape:', paged_out.shape)\nprint('Max diff vs reference:', (paged_out - ref_out).abs().max().item())\nprint('Match:', torch.allclose(paged_out, ref_out, atol=1e-5))",
+        "role": "demo"
+      }
+    ]
+  },
+  "ring_attention": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def ring_attention(Q, K, V, num_devices):\n    B, S, D = Q.shape\n    chunk = S // num_devices\n    scale = D ** -0.5\n\n    Q_chunks = Q.split(chunk, dim=1)\n    K_chunks = K.split(chunk, dim=1)\n    V_chunks = V.split(chunk, dim=1)\n\n    outputs = []\n    for i, Qi in enumerate(Q_chunks):\n        m = torch.full((B, chunk, 1), float('-inf'), device=Q.device, dtype=Q.dtype)\n        l = torch.zeros(B, chunk, 1, device=Q.device, dtype=Q.dtype)\n        o = torch.zeros(B, chunk, D, device=Q.device, dtype=Q.dtype)\n\n        for j in range(num_devices):\n            Kj = K_chunks[(i + j) % num_devices]\n            Vj = V_chunks[(i + j) % num_devices]\n            scores = (Qi @ Kj.transpose(-2, -1)) * scale\n            m_new = torch.maximum(m, scores.max(dim=-1, keepdim=True).values)\n            exp_scores = torch.exp(scores - m_new)\n            l_new = l * torch.exp(m - m_new) + exp_scores.sum(dim=-1, keepdim=True)\n            o = o * (l * torch.exp(m - m_new)) / l_new + (exp_scores @ Vj) / l_new\n            m, l = m_new, l_new\n\n        outputs.append(o)\n\n    return torch.cat(outputs, dim=1)",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(42)\nB, S, D = 2, 8, 16\nQ = torch.randn(B, S, D)\nK = torch.randn(B, S, D)\nV = torch.randn(B, S, D)\n\nscale = D ** -0.5\nscores_ref = (Q @ K.transpose(-2, -1)) * scale\nref_out = torch.softmax(scores_ref, dim=-1) @ V\n\nfor num_devices in [2, 4]:\n    ring_out = ring_attention(Q, K, V, num_devices=num_devices)\n    max_diff = (ring_out - ref_out).abs().max().item()\n    match = torch.allclose(ring_out, ref_out, atol=1e-5)\n    print(f'num_devices={num_devices}  shape={tuple(ring_out.shape)}  max_diff={max_diff:.2e}  match={match}')",
+        "role": "demo"
+      }
+    ]
+  },
+  "tensor_parallel": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class TensorParallelMLP(nn.Module):\n    def __init__(self, d_model, d_ff, world_size):\n        super().__init__()\n        self.world_size = world_size\n        shard_size = d_ff // world_size\n        self.w1_shards = nn.ParameterList([\n            nn.Parameter(torch.randn(d_model, shard_size) * (2 / d_model) ** 0.5)\n            for _ in range(world_size)\n        ])\n        self.w2_shards = nn.ParameterList([\n            nn.Parameter(torch.randn(shard_size, d_model) * (2 / d_ff) ** 0.5)\n            for _ in range(world_size)\n        ])\n\n    def forward(self, x):\n        output = None\n        for w1, w2 in zip(self.w1_shards, self.w2_shards):\n            h = torch.nn.functional.gelu(x @ w1)\n            partial = h @ w2\n            output = partial if output is None else output + partial\n        return output",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(42)\nd_model, d_ff, world_size = 64, 256, 4\nx = torch.randn(2, d_model)\n\ntp_mlp = TensorParallelMLP(d_model, d_ff, world_size)\nout = tp_mlp(x)\nprint(\"Output shape:\", out.shape)  # expect (2, 64)\n\nw1_full = torch.cat([p.data for p in tp_mlp.w1_shards], dim=1)  # (d_model, d_ff)\nw2_full = torch.cat([p.data for p in tp_mlp.w2_shards], dim=0)  # (d_ff, d_model)\nref = torch.nn.functional.gelu(x @ w1_full) @ w2_full\n\nprint(\"Max diff vs reference:\", (out - ref).abs().max().item())  # expect ~0",
+        "role": "demo"
+      }
+    ]
+  },
+  "fsdp_step": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def fsdp_step(param_shards, grad_fn, world_size):\n    full_param = torch.cat(param_shards)\n    grad = grad_fn(full_param)\n    grad_shards = list(grad.chunk(world_size))\n    new_shards = [\n        param_shards[i] - 0.01 * grad_shards[i]\n        for i in range(world_size)\n    ]\n    return new_shards",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nworld_size = 4\nshard_size = 8\n\nparam_shards = [torch.randn(shard_size) for _ in range(world_size)]\n\ngrad_fn = lambda p: 2.0 * p\n\nnew_shards = fsdp_step(param_shards, grad_fn, world_size)\nfsdp_result = torch.cat(new_shards)\n\nfull_param = torch.cat(param_shards)\nref_result = full_param - 0.01 * grad_fn(full_param)\n\nprint(\"FSDP result shape:\", fsdp_result.shape)  # expect (32,)\nprint(\"Max diff vs SGD reference:\", (fsdp_result - ref_result).abs().max().item())  # expect ~0",
+        "role": "demo"
+      }
+    ]
+  },
+  "max_pool2d": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def max_pool2d(x, kernel_size, stride=None):\n    if stride is None:\n        stride = kernel_size\n    patches = x.unfold(2, kernel_size, stride).unfold(3, kernel_size, stride)\n    return patches.flatten(-2).max(dim=-1).values",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "x = torch.randn(1, 1, 4, 4)\nout = max_pool2d(x, kernel_size=2, stride=2)\nref = F.max_pool2d(x, kernel_size=2, stride=2)\nprint(\"Output shape:\", out.shape)\nprint(\"Matches F.max_pool2d:\", torch.allclose(out, ref))",
+        "role": "demo"
+      }
+    ]
+  },
+  "focal_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def focal_loss(logits, targets, alpha=0.25, gamma=2.0):\n    N, C = logits.shape\n    shifted = logits - logits.max(dim=-1, keepdim=True).values\n    exp_s = torch.exp(shifted)\n    probs = exp_s / exp_s.sum(dim=-1, keepdim=True)\n    p_t = probs[torch.arange(N), targets]\n    log_p_t = torch.log(p_t + 1e-8)\n    fl = -alpha * (1 - p_t) ** gamma * log_p_t\n    return fl.mean()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nlogits = torch.randn(8, 4)\ntargets = torch.randint(0, 4, (8,))\n\nfl_gamma0 = focal_loss(logits, targets, alpha=0.25, gamma=0.0)\nce = F.cross_entropy(logits, targets)\nprint(f\"Focal (gamma=0): {fl_gamma0:.4f}  |  alpha * CE: {0.25 * ce:.4f}\")\n\nfl_g2 = focal_loss(logits, targets, alpha=0.25, gamma=2.0)\nfl_g5 = focal_loss(logits, targets, alpha=0.25, gamma=5.0)\nprint(f\"Focal gamma=2: {fl_g2:.4f}  |  gamma=5: {fl_g5:.4f}  (higher gamma -> lower loss)\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "contrastive_loss": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def contrastive_loss(q, k, temperature=0.07):\n    logits = (q @ k.T) / temperature\n    N = q.shape[0]\n    targets = torch.arange(N, device=q.device)\n    log_sum_exp = torch.log(torch.exp(logits).sum(dim=-1))\n    log_p = logits[torch.arange(N), targets] - log_sum_exp\n    return -log_p.mean()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nN, D = 8, 16\n\nv = torch.randn(N, D)\nq = v / v.norm(dim=-1, keepdim=True)\nk = q.clone()\nloss_perfect = contrastive_loss(q, k)\nprint(f\"Perfect alignment loss: {loss_perfect:.4f}  (should be near log(1/N) = {-torch.log(torch.tensor(N, dtype=torch.float)):.4f})\")\n\nq_rand = torch.randn(N, D)\nq_rand = q_rand / q_rand.norm(dim=-1, keepdim=True)\nk_rand = torch.randn(N, D)\nk_rand = k_rand / k_rand.norm(dim=-1, keepdim=True)\nloss_rand = contrastive_loss(q_rand, k_rand)\nprint(f\"Random embeddings loss:  {loss_rand:.4f}  (should be higher)\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "activation_checkpointing": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def checkpoint_sequential(fns, x):\n    for fn in fns:\n        x = cp.checkpoint(fn, x, use_reentrant=False)\n    return x",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nlayers = [torch.nn.Linear(16, 16) for _ in range(4)]\nx = torch.randn(4, 16, requires_grad=True)\n\nout_cp = checkpoint_sequential(layers, x)\n\nx2 = x.detach().requires_grad_(True)\nout_naive = x2\nfor layer in layers:\n    out_naive = layer(out_naive)\n\nprint(\"Outputs match:\", torch.allclose(out_cp, out_naive, atol=1e-5))\n\nout_cp.sum().backward()\nprint(\"Gradient flows (x.grad is not None):\", x.grad is not None)",
+        "role": "demo"
+      }
+    ]
+  },
+  "qlora": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class QLoRALinear(nn.Module):\n    def __init__(self, in_features, out_features, rank, alpha=1.0):\n        super().__init__()\n        self.rank = rank\n        self.alpha = alpha\n        self.quantized_weight = nn.Parameter(\n            torch.zeros(out_features, in_features, dtype=torch.int8), requires_grad=False)\n        self.scale = nn.Parameter(torch.ones(out_features, 1))\n        self.lora_A = nn.Parameter(torch.randn(in_features, rank) * 0.01)\n        self.lora_B = nn.Parameter(torch.zeros(rank, out_features))\n\n    def set_weight(self, W_fp32):\n        scale = W_fp32.abs().max(dim=1, keepdim=True).values.clamp(min=1e-8) / 127.0\n        q = (W_fp32 / scale).round().clamp(-127, 127).to(torch.int8)\n        self.quantized_weight.data.copy_(q)\n        self.scale.data.copy_(scale)\n\n    def forward(self, x):\n        W_fp = self.quantized_weight.float() * self.scale\n        base = x @ W_fp.T\n        delta = x @ self.lora_A @ self.lora_B * (self.alpha / self.rank)\n        return base + delta",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nin_f, out_f, rank = 64, 32, 4\nlayer = QLoRALinear(in_f, out_f, rank, alpha=2.0)\n\nW_ref = torch.randn(out_f, in_f)\nlayer.set_weight(W_ref)\n\nx = torch.randn(8, in_f)\ny_qlora = layer(x)\ny_ref = x @ W_ref.T  # full-precision baseline (no LoRA delta)\n\nprint(\"Output shape:\", y_qlora.shape)          # (8, 32)\nprint(\"Max abs error vs fp32:\", (y_qlora - y_ref).abs().max().item())",
+        "role": "demo"
+      }
+    ]
+  },
+  "mamba_ssm": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def mamba_ssm_step(x, h, A, B, C, delta):\n    dA = torch.exp(delta.unsqueeze(-1) * A.unsqueeze(0))\n    dB = delta.unsqueeze(-1) * B\n    h_new = dA * h + dB * x.unsqueeze(-1)\n    y = (h_new * C).sum(dim=-1)\n    return y, h_new",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nB_size, D, N = 2, 8, 4  # batch, channels, state_dim\n\nx     = torch.randn(B_size, D)\nh     = torch.zeros(B_size, D, N)\nA     = -torch.rand(D, N)          # negative for stability\nB_mat = torch.randn(D, N)\nC     = torch.randn(B_size, D, N)\ndelta = torch.rand(B_size, D).add(0.1)  # positive step sizes\n\ny, h_new = mamba_ssm_step(x, h, A, B_mat, C, delta)\n\nprint(\"y shape:    \", y.shape)      # (2, 8)\nprint(\"h_new shape:\", h_new.shape)  # (2, 8, 4)\n\ndA_manual = torch.exp(delta[0, 0] * A[0])\ndA_check  = torch.exp(delta[0:1, 0:1] * A[0:1])[0, 0]\nprint(\"dA formula check (should be ~0):\", (dA_manual - dA_check).abs().max().item())",
+        "role": "demo"
+      }
+    ]
+  },
+  "depthwise_conv": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def depthwise_separable_conv(x, dw_weight, pw_weight):\n    B, C_in, H, W = x.shape\n    kH, kW = dw_weight.shape[2], dw_weight.shape[3]\n    patches = x.unfold(2, kH, 1).unfold(3, kW, 1)\n    dw_out = (patches * dw_weight[:, 0].view(1, C_in, 1, 1, kH, kW)).sum(dim=(-2, -1))\n    out = torch.einsum('bchw,oc->bohw', dw_out, pw_weight[:, :, 0, 0])\n    return out",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nB, C_in, H, W = 2, 4, 8, 8\nC_out, kH, kW = 8, 3, 3\n\nx         = torch.randn(B, C_in, H, W)\ndw_weight = torch.randn(C_in, 1, kH, kW)   # one kernel per input channel\npw_weight = torch.randn(C_out, C_in, 1, 1)  # 1x1 conv\n\nout = depthwise_separable_conv(x, dw_weight, pw_weight)\nprint(\"Output shape:\", out.shape)  # (2, 8, 6, 6)\n\npatches = x.unfold(2, kH, 1).unfold(3, kW, 1)\ndw_ch0 = (patches[:, 0:1] * dw_weight[0:1, 0].view(1, 1, 1, 1, kH, kW)).sum(dim=(-2, -1))\ndw_ch1 = (patches[:, 1:2] * dw_weight[1:2, 0].view(1, 1, 1, 1, kH, kW)).sum(dim=(-2, -1))\nprint(\"DW ch0 and ch1 are independent (cross-correlation ~0):\",\n      (dw_ch0 * dw_ch1).mean().abs().item() < 1.0)",
+        "role": "demo"
+      }
+    ]
+  },
+  "vit_block": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "class ViTBlock(nn.Module):\n    def __init__(self, d_model, num_heads):\n        super().__init__()\n        self.num_heads = num_heads\n        self.d_h = d_model // num_heads\n        self.norm1 = nn.LayerNorm(d_model)\n        self.norm2 = nn.LayerNorm(d_model)\n        self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)\n        self.proj = nn.Linear(d_model, d_model)\n        self.fc1 = nn.Linear(d_model, 4 * d_model)\n        self.fc2 = nn.Linear(4 * d_model, d_model)\n\n    def _gelu(self, x):\n        return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))\n\n    def _mha(self, x):\n        B, N, D = x.shape\n        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.d_h).permute(2, 0, 3, 1, 4)\n        q, k, v = qkv[0], qkv[1], qkv[2]\n        scale = self.d_h ** -0.5\n        attn = torch.softmax(q @ k.transpose(-2, -1) * scale, dim=-1)\n        out = (attn @ v).transpose(1, 2).reshape(B, N, D)\n        return self.proj(out)\n\n    def forward(self, x):\n        x = x + self._mha(self.norm1(x))\n        x = x + self.fc2(self._gelu(self.fc1(self.norm2(x))))\n        return x",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nbatch, num_patches, d_model, num_heads = 2, 16, 64, 4\n\nblock = ViTBlock(d_model, num_heads)\nx = torch.randn(batch, num_patches, d_model)\nout = block(x)\n\nprint(\"Input shape: \", x.shape)    # (2, 16, 64)\nprint(\"Output shape:\", out.shape)  # (2, 16, 64)\nassert out.shape == x.shape, \"Shape mismatch!\"\nprint(\"Shape preserved: True\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "diff_attention": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def diff_attention(Q, K, V, lambda_val):\n    B, S, D2 = Q.shape\n    D_h = D2 // 2\n    Q1, Q2 = Q[..., :D_h], Q[..., D_h:]\n    K1, K2 = K[..., :D_h], K[..., D_h:]\n    scale = D_h ** -0.5\n    A1 = torch.softmax(Q1 @ K1.transpose(-2, -1) * scale, dim=-1)\n    A2 = torch.softmax(Q2 @ K2.transpose(-2, -1) * scale, dim=-1)\n    return (A1 - lambda_val * A2) @ V",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nB, S, D2, D_v = 2, 4, 8, 6\nQ = torch.randn(B, S, D2)\nK = torch.randn(B, S, D2)\nV = torch.randn(B, S, D_v)\n\nD_h = D2 // 2\nscale = D_h ** -0.5\nstandard = torch.softmax(Q[..., :D_h] @ K[..., :D_h].transpose(-2, -1) * scale, dim=-1) @ V\ndiff_zero = diff_attention(Q, K, V, lambda_val=0.0)\nprint(\"lambda=0 matches standard attention:\", torch.allclose(diff_zero, standard, atol=1e-6))\n\nQ_same = torch.cat([Q[..., :D_h], Q[..., :D_h]], dim=-1)\nK_same = torch.cat([K[..., :D_h], K[..., :D_h]], dim=-1)\ndiff_one = diff_attention(Q_same, K_same, V, lambda_val=1.0)\nprint(\"lambda=1 with identical halves gives zero:\", torch.allclose(diff_one, torch.zeros_like(diff_one), atol=1e-6))\nprint(\"Output shape:\", diff_zero.shape)  # (2, 4, 6)",
+        "role": "demo"
+      }
+    ]
+  },
+  "mla": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def mla_attention(X, W_dkv, W_uk, W_uv, W_q, num_heads):\n    B, S, D = X.shape\n    D_h = W_q.shape[1] // num_heads\n    c_kv = X @ W_dkv\n    K = c_kv @ W_uk\n    V = c_kv @ W_uv\n    Q = X @ W_q\n    def split_heads(t):\n        return t.view(B, S, num_heads, D_h).transpose(1, 2)\n    Q, K, V = split_heads(Q), split_heads(K), split_heads(V)\n    scale = D_h ** -0.5\n    attn = torch.softmax(Q @ K.transpose(-2, -1) * scale, dim=-1)\n    out = (attn @ V).transpose(1, 2).reshape(B, S, num_heads * D_h)\n    return out",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nB, S, D = 2, 6, 32\nnum_heads = 4\nD_h = 8          # head dim\nD_c = 8          # compressed KV dim (latent)\n\nW_dkv = torch.randn(D, D_c) * 0.1      # compress to latent\nW_uk  = torch.randn(D_c, num_heads * D_h) * 0.1  # up-project to K\nW_uv  = torch.randn(D_c, num_heads * D_h) * 0.1  # up-project to V\nW_q   = torch.randn(D, num_heads * D_h) * 0.1\n\nX = torch.randn(B, S, D)\n\nc_kv = X @ W_dkv\nK_full = c_kv @ W_uk\nprint(f\"Input shape:          {X.shape}\")       # (2, 6, 32)\nprint(f\"Compressed KV shape:  {c_kv.shape}\")    # (2, 6, 8)  <-- small latent\nprint(f\"Full K shape:         {K_full.shape}\")  # (2, 6, 32) <-- expanded\n\nout = mla_attention(X, W_dkv, W_uk, W_uv, W_q, num_heads)\nprint(f\"Output shape:         {out.shape}\")     # (2, 6, 32)",
+        "role": "demo"
+      }
+    ]
+  },
+  "multi_token_prediction": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def multi_token_prediction_loss(hidden_states, heads, targets):\n    B, S, D = hidden_states.shape\n    N = len(heads)\n    total_loss = 0.0\n    for i, head in enumerate(heads):\n        logits = hidden_states @ head\n        logits_max = logits.max(dim=-1, keepdim=True).values\n        shifted = logits - logits_max\n        log_probs = shifted - torch.log(torch.exp(shifted).sum(dim=-1, keepdim=True))\n        tgt = targets[:, :, i]\n        log_p = log_probs.gather(-1, tgt.unsqueeze(-1)).squeeze(-1)\n        total_loss = total_loss + (-log_p.mean())\n    return total_loss / N",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\nB, S, D, V = 2, 5, 16, 10\n\nhidden = torch.randn(B, S, D)\nhead_single = torch.randn(D, V)\ntargets_single = torch.randint(0, V, (B, S, 1))\n\nmtp_loss = multi_token_prediction_loss(hidden, [head_single], targets_single)\n\nlogits = hidden @ head_single\nce_loss = torch.nn.functional.cross_entropy(logits.reshape(-1, V), targets_single[:, :, 0].reshape(-1))\n\nprint(f\"MTP loss (N=1):  {mtp_loss.item():.6f}\")\nprint(f\"Standard CE:     {ce_loss.item():.6f}\")\nprint(f\"N=1 matches CE:  {torch.allclose(mtp_loss, ce_loss, atol=1e-5)}\")\n\nheads_3 = [torch.randn(D, V) for _ in range(3)]\ntargets_3 = torch.randint(0, V, (B, S, 3))\nloss_3 = multi_token_prediction_loss(hidden, heads_3, targets_3)\nprint(f\"MTP loss (N=3):  {loss_3.item():.6f}\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "moe_load_balance": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def moe_load_balance_loss(router_logits, num_experts):\n    N = router_logits.shape[0]\n    assignments = router_logits.argmax(dim=-1)  # (N,)\n    f = torch.zeros(num_experts, device=router_logits.device)\n    for e in range(num_experts):\n        f[e] = (assignments == e).float().mean()\n    probs = torch.softmax(router_logits, dim=-1)  # (N, num_experts)\n    P = probs.mean(dim=0)                          # (num_experts,)\n    return num_experts * (f * P).sum()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "num_experts = 4\nN_tokens = 100\nlogits_uniform = torch.zeros(N_tokens, num_experts)\nloss_uniform = moe_load_balance_loss(logits_uniform, num_experts)\nprint(f\"Uniform routing loss: {loss_uniform.item():.4f}  (expected 1.0)\")\n\nlogits_collapsed = torch.zeros(N_tokens, num_experts)\nlogits_collapsed[:, 0] = 100.0\nloss_collapsed = moe_load_balance_loss(logits_collapsed, num_experts)\nprint(f\"Collapsed routing loss: {loss_collapsed.item():.4f}  (expected > 1.0)\")\n\ntorch.manual_seed(0)\nlogits_grad = torch.randn(16, num_experts, requires_grad=True)\nloss_grad = moe_load_balance_loss(logits_grad, num_experts)\nloss_grad.backward()\nprint(f\"Gradient exists: {logits_grad.grad is not None}\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "mcts_search": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def mcts_step(values, visit_counts, parent_visits, c_puct=1.414):\n    import math as _math\n    exploration = c_puct * torch.sqrt(\n        torch.log(torch.tensor(parent_visits + 1, dtype=torch.float32)) /\n        (visit_counts.float() + 1)\n    )\n    ucb = values + exploration\n    selected_idx = int(ucb.argmax().item())\n    rollout_value = torch.rand(1).item()\n    n = visit_counts[selected_idx].item()\n    new_value = (values[selected_idx].item() * n + rollout_value) / (n + 1)\n    updated_values = values.clone()\n    updated_visits = visit_counts.clone()\n    updated_values[selected_idx] = new_value\n    updated_visits[selected_idx] += 1\n    return selected_idx, updated_values, updated_visits",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(42)\nnum_children = 5\nvalues = torch.zeros(num_children)\nvisits = torch.zeros(num_children, dtype=torch.long)\nparent_visits = 0\n\nprint(\"Running 5 MCTS steps:\")\nprint(f\"{'Step':>4}  {'Selected':>8}  {'Visit counts'}\")\nfor step in range(5):\n    idx, values, visits = mcts_step(values, visits, parent_visits)\n    parent_visits += 1\n    print(f\"{step+1:>4}  {idx:>8}  {visits.tolist()}\")\n\nprint(f\"\\nTotal visits: {visits.sum().item()} (expected 5)\")\nprint(f\"All nodes visited at least once: {(visits > 0).all().item()}\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "reward_model": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def reward_model_loss(chosen_hidden, rejected_hidden, reward_head):\n    r_chosen = (chosen_hidden @ reward_head).squeeze(-1)\n    r_rejected = (rejected_hidden @ reward_head).squeeze(-1)\n    margin = r_chosen - r_rejected\n    loss = -torch.log(1.0 / (1.0 + torch.exp(-margin))).mean()\n    return loss",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\n\nB, D = 8, 64\nreward_head = torch.randn(D, 1)\n\nh = torch.randn(B, D)\nloss_equal = reward_model_loss(h, h, reward_head)\nprint(f\"Equal hidden states => loss = {loss_equal.item():.4f}  (expected ≈ {math.log(2):.4f})\")\n\nchosen  = torch.ones(B, D)\nrejected = -torch.ones(B, D)\nloss_good = reward_model_loss(chosen, rejected, reward_head)\nprint(f\"Chosen >> rejected  => loss = {loss_good.item():.4f}  (expected small)\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "adaln_zero": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def adaln_zero(x, cond, W_ada, b_ada):\n    B, N, D = x.shape\n    params = cond @ W_ada + b_ada\n    chunks = params.chunk(6, dim=-1)\n    gamma1, beta1, alpha1 = chunks[0], chunks[1], chunks[2]\n    mean = x.mean(dim=-1, keepdim=True)\n    var = x.var(dim=-1, keepdim=True, unbiased=False)\n    x_norm = (x - mean) / (var + 1e-6).sqrt()\n    out = alpha1.unsqueeze(1) * (gamma1.unsqueeze(1) * x_norm + beta1.unsqueeze(1))\n    return out",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\n\nB, N, D = 4, 16, 32\nC = 16  # conditioning dim\n\nx    = torch.randn(B, N, D)\ncond = torch.randn(B, C)\n\nW_ada = torch.zeros(C, 6 * D)\nb_ada = torch.zeros(6 * D)\nout_zero = adaln_zero(x, cond, W_ada, b_ada)\nprint(f\"Zero W_ada, zero b_ada => max abs output: {out_zero.abs().max().item():.6f}  (expected 0.0)\")\n\nW_ada_rand = torch.randn(C, 6 * D) * 0.1\nb_ada_rand = torch.randn(6 * D) * 0.1\nout_rand = adaln_zero(x, cond, W_ada_rand, b_ada_rand)\nprint(f\"Random W_ada          => output shape: {out_rand.shape}, mean abs: {out_rand.abs().mean().item():.4f}\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "ddim_step": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def ddim_step(x_t, noise_pred, alpha_bar_t, alpha_bar_prev):\n    x0_pred = (x_t - (1 - alpha_bar_t) ** 0.5 * noise_pred) / (alpha_bar_t ** 0.5)\n    noise_direction = (1 - alpha_bar_prev) ** 0.5 * noise_pred\n    x_prev = (alpha_bar_prev ** 0.5) * x0_pred + noise_direction\n    return x_prev",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(42)\n\nT = 5\nalpha_bars = torch.linspace(0.99, 0.01, T + 1)  # index 0..T\n\nx_clean = torch.tensor([1.0, -1.0, 0.5])  # target signal\nnoise   = torch.randn_like(x_clean)\n\nab_T = alpha_bars[T]\nx_t  = ab_T ** 0.5 * x_clean + (1 - ab_T) ** 0.5 * noise\n\nprint(f\"{'Step':>4}  {'alpha_bar_t':>12}  {'x_t (first elem)':>18}\")\nprint(\"-\" * 42)\nfor step in range(T, 0, -1):\n    ab_t    = alpha_bars[step]\n    ab_prev = alpha_bars[step - 1]\n    noise_pred = (x_t - ab_t ** 0.5 * x_clean) / (1 - ab_t) ** 0.5\n    x_t = ddim_step(x_t, noise_pred, ab_t, ab_prev)\n    print(f\"{step:>4}  {ab_prev.item():>12.4f}  {x_t[0].item():>18.4f}\")\n\nprint(f\"\\nFinal x vs clean: {x_t.tolist()}  vs  {x_clean.tolist()}\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "flow_matching": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def flow_matching_loss(model_output, x0, x1, t):\n    target_velocity = x1 - x0\n    diff = model_output - target_velocity\n    return (diff * diff).mean()",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "torch.manual_seed(0)\n\nB, D = 16, 8\nx0 = torch.randn(B, D)\nx1 = torch.randn(B, D)\nt  = torch.rand(B)\n\nperfect_output = x1 - x0\nloss_perfect = flow_matching_loss(perfect_output, x0, x1, t)\nprint(f\"Perfect prediction => loss = {loss_perfect.item():.6f}  (expected 0.0)\")\n\nrandom_output = torch.randn(B, D)\nloss_random = flow_matching_loss(random_output, x0, x1, t)\nprint(f\"Random prediction  => loss = {loss_random.item():.4f}   (expected > 0)\")\n\nnoisy_output = perfect_output + 0.1 * torch.randn(B, D)\nloss_noisy = flow_matching_loss(noisy_output, x0, x1, t)\nprint(f\"Noisy prediction   => loss = {loss_noisy.item():.4f}   (expected small but > 0)\")",
+        "role": "demo"
+      }
+    ]
+  },
+  "noise_schedule": {
+    "cells": [
+      {
+        "type": "code",
+        "source": "def noise_schedule(num_timesteps, schedule_type='cosine'):\n    T = num_timesteps\n    t = torch.arange(T, dtype=torch.float32)\n    if schedule_type == 'linear':\n        beta_start, beta_end = 1e-4, 0.02\n        betas = beta_start + (beta_end - beta_start) * t / (T - 1)\n        alpha_bar = torch.cumprod(1 - betas, dim=0)\n    elif schedule_type == 'cosine':\n        s = 0.008\n        f = torch.cos(((t / T + s) / (1 + s)) * (math.pi / 2)) ** 2\n        f0 = math.cos((s / (1 + s)) * (math.pi / 2)) ** 2\n        alpha_bar = (f / f0).clamp(0.0001, 0.9999)\n    elif schedule_type == 'sigmoid':\n        beta_start, beta_end = 1e-4, 0.02\n        x = t / T * 12 - 6\n        sig = 1 / (1 + torch.exp(-x))\n        betas = beta_start + (beta_end - beta_start) * (sig - sig.min()) / (sig.max() - sig.min())\n        alpha_bar = torch.cumprod(1 - betas, dim=0)\n    else:\n        raise ValueError(f'Unknown schedule_type: {schedule_type}')\n    return alpha_bar",
+        "role": "solution"
+      },
+      {
+        "type": "code",
+        "source": "T = 1000\nschedules = ['linear', 'cosine', 'sigmoid']\ncheckpoints = [0, T // 4, T // 2, 3 * T // 4, T - 1]\nlabels = ['t=0', 'T/4', 'T/2', '3T/4', 'T-1']\n\ncol_w = 10\nheader = f\"{'t':>6}\" + \"\".join(f\"{s:>{col_w}}\" for s in schedules)\nprint(header)\nprint(\"-\" * len(header))\n\nresults = {s: noise_schedule(T, s) for s in schedules}\nfor label, idx in zip(labels, checkpoints):\n    row = f\"{label:>6}\" + \"\".join(f\"{results[s][idx].item():>{col_w}.4f}\" for s in schedules)\n    print(row)",
+        "role": "demo"
+      }
+    ]
+  }
+}
