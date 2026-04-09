@@ -62,14 +62,22 @@ npm run dev
 git clone https://github.com/whwangovo/pyre.git
 cd pyre
 
-# create & activate your preferred Python env, e.g.:
-conda create -n pyre python=3.11 -y && conda activate pyre
-# or: python3 -m venv .venv && source .venv/bin/activate
+# create a Python env — pick one:
+uv venv --python 3.11 .venv && source .venv/bin/activate && uv pip install -e .
+# or: python3 -m venv .venv && source .venv/bin/activate && pip install -e .
 
-pip install -e .   # or: uv pip install -e .
 npm install
 npm run dev
 ```
+
+> **conda users:** `npm run dev` expects `.venv/bin/python`, so if you use conda you must activate the environment before running `npm run dev`:
+>
+> ```bash
+> conda create -n pyre python=3.11 -y && conda activate pyre
+> pip install -e .
+> npm install
+> npm run dev   # run with conda env activated
+> ```
 
 Either way, once running:
 

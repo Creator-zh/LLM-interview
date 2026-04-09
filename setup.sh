@@ -30,3 +30,4 @@ npm install
 echo ""
 echo "Setup complete."
 echo "To start: npm run dev"
+echo "(No need to activate the virtual environment manually.)"

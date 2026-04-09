@@ -11,7 +11,7 @@
   "scripts": {
     "postinstall": "cd web && npm install",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "uvicorn grading_service.main:app --reload --reload-exclude '.git' --reload-exclude '.venv' --port 8000",
+    "dev:backend": ".venv/bin/python -m uvicorn grading_service.main:app --reload --reload-exclude '.git' --reload-exclude '.venv' --port 8000",
     "dev:frontend": "cd web && npm run dev"
   },
   "devDependencies": {

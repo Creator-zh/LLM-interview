@@ -62,14 +62,22 @@ npm run dev
 git clone https://github.com/whwangovo/pyre.git
 cd pyre
 
-# 创建并激活 Python 环境，例如：
-conda create -n pyre python=3.11 -y && conda activate pyre
-# 或：python3 -m venv .venv && source .venv/bin/activate
+# 创建 Python 环境（二选一）：
+uv venv --python 3.11 .venv && source .venv/bin/activate && uv pip install -e .
+# 或：python3 -m venv .venv && source .venv/bin/activate && pip install -e .
 
-pip install -e .   # 或：uv pip install -e .
 npm install
 npm run dev
 ```
+
+> **conda 用户：** `npm run dev` 默认使用 `.venv/bin/python`，如果你用 conda 则需要先激活环境再运行 `npm run dev`：
+>
+> ```bash
+> conda create -n pyre python=3.11 -y && conda activate pyre
+> pip install -e .
+> npm install
+> npm run dev   # 需在 conda 环境激活状态下运行
+> ```
 
 启动后：
 
