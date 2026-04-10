@@ -56,6 +56,19 @@ npm run dev
 
 `setup.sh` automatically creates and activates a Python environment (prefers `uv` → `conda` → `venv`), installs all dependencies, then prints the start command.
 
+**Windows (PowerShell)**
+
+```powershell
+git clone https://github.com/whwangovo/pyre.git
+cd pyre
+py -3.11 -m venv .venv
+.\.venv\Scripts\python -m pip install -e .
+npm install
+npm run dev
+```
+
+`npm run dev` auto-detects `.venv/Scripts/python.exe` on Windows and `.venv/bin/python` on Unix-like systems.
+
 **Option B — manual**
 
 ```bash

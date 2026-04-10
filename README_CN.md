@@ -56,6 +56,19 @@ npm run dev
 
 `setup.sh` 自动创建并激活 Python 环境（优先级：`uv` → `conda` → `venv`），安装所有依赖，完成后打印启动命令。
 
+**Windows（PowerShell）**
+
+```powershell
+git clone https://github.com/whwangovo/pyre.git
+cd pyre
+py -3.11 -m venv .venv
+.\.venv\Scripts\python -m pip install -e .
+npm install
+npm run dev
+```
+
+`npm run dev` 会在 Windows 自动使用 `.venv\Scripts\python.exe`，在类 Unix 系统自动使用 `.venv/bin/python`。
+
 **方式 B — 手动安装**
 
 ```bash
